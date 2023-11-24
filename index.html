@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Realtime GPS Tracker Dashboard</title>
+  <!-- <title>Realtime GPS Tracker Dashboard</title> -->
+  <link rel="stylesheet" href="map.css">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css" integrity="sha384-Gn5384xqQ1aoWXA+058RXPxPg6fy4IWvTNh0E263XmFcJlSAwiGgFAW/dAiS6JXm" crossorigin="anonymous">
+  <style>
+    #map-canvas {
+      height: 400px;
+    }
+
+    #map-canvas-history {
+      height: 400px;
+    }
+  </style>
+</head>
+<body>
+
+    
+  
+    
+      <!-- <h1>Realtime GPS Tracker Dashboard</h1> -->
+     
+      <!-- <p>Revaldo's Realtime Tracking System</p>   -->
+      
+      <!-- <div id="history-list"></div> -->
+    
+  
+  <div class="bg"></div>
+  <div class="bg-others"> 
+    <div class="container">
+  <div id="first-page">
+    <h1>Realtime GPS Tracker Dashboard</h1>
+    <hr>
+    <center><hr style="height:2px; border:none; color:#ffffff; background-color:#ffffff; width:35%; margin: 0 auto 0 auto;"></center>
+    <p>Revaldo's Realtime Tracking System</p>
+    <!-- <div id="map-canvas"></div> -->
+    <center><div id="map-canvas"></div></center><hr>
+    <button id="save-button">Save Data</button>
+    <button id="next-button">Go to History</button>
+  </div>
+
+
+  
+  <div id="second-page" style="display: none;">
+    <h1>History</h1>
+    <hr>
+    <center><hr style="height:2px; border:none; color:#ffffff; background-color:#ffffff; width:35%; margin: 0 auto 0 auto;"></center>
+    <p>Revaldo's Realtime Tracking System</p>
+    <select id="date-select">
+      <option disabled selected>Select a date</option>
+    </select>
+    <button id="retrieve-button">Retrieve Data</button>
+    <hr>
+    <center><div id="map-canvas-history"></div></center>
+    <h1><p id="distance-traveled"></p></h1>
+  </div>
+
+</div>
+</div>
+
+  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.9.1/firebase-database.js"></script>
+  <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCbVt4N99BP0nuEet8DN8qK9M2YWNHzWGQ&callback=initialize" async defer></script>
+  <script>
+    var map;
+    var marker;
+    var lineCoords = [];
+    var distanceTraveled = 0;
+    var data;
+
+    function calculateDistance(lat1, lon1, lat2, lon2) {
+      var p = 0.017453292519943295; // Math.PI / 180
+      var a = 0.5 - Math.cos((lat2 - lat1) * p) / 2 + Math.cos(lat1 * p) * Math.cos(lat2 * p) * (1 - Math.cos((lon2 - lon1) * p)) / 2;
+      return 12742 * Math.asin(Math.sqrt(a)); // 2 * R; R = 6371 km
+    }
+
+    function updateDashboard(gps) {
+      var latitude = gps.LAT;
+      var longitude = gps.LNG;
+
+      if (lineCoords.length > 0) {
+        var previousLocation = lineCoords[lineCoords.length - 1];
+        var dist = calculateDistance(previousLocation.lat(), previousLocation.lng(), latitude, longitude);
+        distanceTraveled += dist;
+      }
+
+      var lineCoordinatesPath = new google.maps.Polyline({
+        path: lineCoords,
+        geodesic: true,
+        strokeColor: '#2E10FF'
+      });
+
+      lineCoordinatesPath.setMap(map);
+
+      lineCoords.push(new google.maps.LatLng(latitude, longitude));
+
+      map.setCenter({ lat: latitude, lng: longitude });
+      marker.setPosition({ lat: latitude, lng: longitude });
+    }
+
+    function initialize() {
+      var lat = -25.540761594000617;
+      var lng = 28.09784641257323;
+
+      map = new google.maps.Map(document.getElementById('map-canvas'), { center: { lat: lat, lng: lng }, zoom: 12 });
+      marker = new google.maps.Marker({ position: { lat: lat, lng: lng }, map: map });
+
+      const firebaseConfig = {
+        // Your Firebase config
+        apiKey: "AIzaSyBxhCUyojjpqpAC6uCG0qpVqNc49LYCQwA",
+        authDomain: "gps-tracker-5ae11.firebaseapp.com",
+        databaseURL: "https://gps-tracker-5ae11-default-rtdb.firebaseio.com",
+        projectId: "gps-tracker-5ae11",
+        storageBucket: "gps-tracker-5ae11.appspot.com",
+        messagingSenderId: "865602568627",
+        appId: "1:865602568627:web:143f40e713e98ce6c84bc6",
+        measurementId: "xxxx"
+      };
+
+      firebase.initializeApp(firebaseConfig);
+
+      var database = firebase.database().ref();
+
+      database.on('value', function(snapshot) {
+        var gps = snapshot.val();
+        updateDashboard(gps);
+      }, function(error) {
+        console.log('Error: ' + error.code);
+      });
+
+      var saveButton = document.getElementById('save-button');
+      saveButton.addEventListener('click', function() {
+        var dateTime = new Date().toLocaleString();
+        var data = {
+          date: dateTime,
+          route: lineCoords.map(function(coord) {
+            return { lat: coord.lat(), lng: coord.lng() };
+          }),
+          distance: distanceTraveled.toFixed(2)
+        };
+
+        var historyRef = firebase.database().ref('history');
+        historyRef.push(data, function(error) {
+          if (error) {
+            console.log('Data could not be saved.' + error);
+          } else {
+            console.log('Data saved successfully.');
+          }
+        });
+      });
+
+      var nextButton = document.getElementById('next-button');
+      nextButton.addEventListener('click', function() {
+        document.getElementById('first-page').style.display = 'none';
+        document.getElementById('second-page').style.display = 'block';
+      });
+
+      // Populate the dropdown menu with available dates
+      var dateSelect = document.getElementById('date-select');
+      var retrieveButton = document.getElementById('retrieve-button');
+
+      var historyRef = firebase.database().ref('history');
+      historyRef.once('value', function(snapshot) {
+        data = snapshot.val();
+        if (data) {
+          var availableDates = Object.keys(data);
+          availableDates.forEach(function(date) {
+            var option = document.createElement('option');
+            option.value = date;
+            option.textContent = data[date].date;
+            dateSelect.appendChild(option);
+          });
+        }
+      });
+
+      // Retrieve button click event
+      retrieveButton.addEventListener('click', function() {
+        var selectedDate = dateSelect.value;
+
+        if (selectedDate && data[selectedDate]) {
+          var selectedData = data[selectedDate];
+          var historyMap = new google.maps.Map(document.getElementById('map-canvas-history'), { center: { lat: lat, lng: lng }, zoom: 12 });
+
+          var historyRoute = selectedData.route;
+          var historyCoords = historyRoute.map(function(coord) {
+            return new google.maps.LatLng(coord.lat, coord.lng);
+          });
+
+          var historyLine = new google.maps.Polyline({
+            path: historyCoords,
+            geodesic: true,
+            strokeColor: '#FF0000',
+            strokeWeight: 2
+          });
+
+          historyLine.setMap(historyMap);
+
+          var historyMarker = new google.maps.Marker({ position: historyCoords[0], map: historyMap });
+
+          var historyDistance = selectedData.distance;
+          document.getElementById('distance-traveled').textContent = 'Distance Traveled: ' + historyDistance + ' km';
+        }
+      });
+    }
+  </script>
+</body>
+</html>
